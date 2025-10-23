@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Studio Project{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap">
+      <h1 class="logo"><a href="{{ url_for('index') }}">Immunisation Explorer</a></h1>
+      <nav>
+        <a href="{{ url_for('index') }}">Level 1A</a>
+        <a href="{{ url_for('vaccination_view') }}">Level 2A</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <div class="wrap">© 2025 Quang Hieu Hoang • Subtask A – Vaccination • COSC3106</div>
+  </footer>
+</body>
+</html>
