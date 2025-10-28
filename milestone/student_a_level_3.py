@@ -1,94 +1,247 @@
+# student_a_level_3.py
+import os
+import sqlite3
 import pyhtml
-def get_page_html(form_data):
-    print("About to return page 3")
-    #Create the top part of the webpage
-    #Note that the drop down list ('select' HTML element) has been given the name "var_star"
-    #We will use this same name in our code further below to obtain what the user selected.
-    page_html="""<!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <title>Page 3 - Forms, databases and advanced queries</title>
-    </head>
-    <body>
-        <h1>Welcome to Page 3!</h1>
-        <p>List the movies based on the star</p>
-        <form action="/page3" method="GET">
-        
-          <label for="var_star">Movie Star</label>
-          <select name="var_star" multiple>"""
-    #Before you read further, play around with the web-page and note how selecting a star name from the first
-    #drop down list populates the second drop down list with the movies in which they have featured.
-    
-    #Note that although we see the name of the movie star in the first drop down list, when a star is selected and submitted,
-    #our program receives the star's ID (primary key).
-    
-    ################################ Movie star drop down list is generated below ######################################
-          
 
-    #Put the query together.
-    query = "select * from star;"
-    
-    #Run the query on the movies.db in the 'database' folder and get the results
-    #Note that all results are in the str data type first, even if they had different types in the database.
-    results = pyhtml.get_results_from_query("database/movies.db",query)
-    
-    #Get the value or values in the HTML dropdown list that we named "var_star" or None no data was sent through.
-    #If the user selects multiple movie stars on the web_page, we will have multiple values.
-    var_star = form_data.get('var_star')
-    
-    print("var_star selected on webpage is: ",var_star)
-    
-    #If the user had selected one or more stars on the web-page, convert their IDs to int
-    if(var_star!=None):
-        #Take the list of strings and convert the items to ints
-        var_star = [int(star) for star in var_star]
-    
-    #Create the drop down list of movie stars
-    for row in results:
-        #row[0] is the ID/primary key of the movie stars
-        page_html+='<option value="'+str(row[0])+'"'
-        #If there was a previous selection of a star on the web page, have them selected by default to be user-friendly.
-        if var_star!=None and row[0]==var_star[0]:
-            page_html+=' selected="selected"'
-            
-        #row[1] is the name of the star, which is what the user sees in the drop down list.
-        page_html+='>'+str(row[1])+'</option>'
-        
-    page_html+="</select><br><br>"
+# --- Absolute path to database ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "database", "immunisation.db")
 
+# ------------------------- helpers -------------------------
+def exec_query(sql: str, params=()):
+    con = sqlite3.connect(DB_PATH)
+    cur = con.cursor()
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+    con.close()
+    return rows
 
-
-    ################################ Movies drop down list is generated below ##########################################
-    
-    page_html+="""<label for="var_movie">Movie</label>
-    <select name="var_movie" """
-
-    #We create this drop down list only if a movie star was chosen
-    if var_star!=None:
-        #Query for getting the list of movie IDs and their titles by star
-        query ="""SELECT movie.mvnumb, movie.mvtitle 
-        FROM movie 
-        JOIN movstar ON movie.mvnumb = movstar.mvnumb """
-        query+=f"WHERE movstar.starnumb = {var_star[0]};"
-
-        #Run query and get results
-        results = pyhtml.get_results_from_query("database/movies.db",query)
-        page_html+=" >"
-        #row[0] is the movie ID (primary key) and row[1] is the movie title
-        for row in results:
-            page_html+='<option value="'+str(row[0])+'"\>'+str(row[1])+'</option>'
-    else:
-        #If no movie star was chosen, we create a dummy list and make it disabled so the user sees the movie drop down
-        #but they can't access it.
-        page_html+="disabled>"
-        page_html+='<option>Choose a star</option>'
-    page_html+="</select><br><br>"
-
-    page_html+="""
-    <input type="submit" value="Show starred movies">
-    </form>
-    <p><a href="/">Go back to home page</a></p>
-    </body>
-    </html>
+def get_first(form_data, key, cast=None):
     """
+    Get first value of query param 'key'. Works for {'k':['v']} and {'k':'v'}.
+    Empty string -> None. Optionally cast (e.g., int).
+    """
+    v = form_data.get(key)
+    if isinstance(v, list):
+        v = v[0] if v else None
+    if v in (None, "", "None"):
+        return None
+    if cast:
+        try:
+            return cast(v)
+        except Exception:
+            return None
+    return v
+
+def options_html(options, selected_val):
+    """
+    Render <option> for <select>. options: [(value,label),...]
+    Handles type differences (int/str) safely.
+    """
+    sel = "" if selected_val is None else str(selected_val).strip()
+    out = []
+    for val, label in options:
+        v_str = "" if val is None else str(val).strip()
+        s = ' selected="selected"' if v_str == sel else ""
+        out.append(f'<option value="{v_str}"{s}>{label}</option>')
+    return "\n".join(out)
+
+def td_row(cells):
+    return "<tr>" + "".join(f"<td>{'' if c is None else c}</td>" for c in cells) + "</tr>"
+
+# Safely coerce coverage text->REAL and ignore blanks
+COVER_REAL = "CAST(NULLIF(TRIM(CAST(coverage AS TEXT)), '') AS REAL)"
+
+# ------------------------- main page -------------------------
+def get_page_html(form_data):
+    """
+    Level 3A — Improvement in vaccination coverage:
+      Inputs:
+        - antigen (by name)
+        - start_year
+        - end_year
+        - top_n (how many countries to list)
+      Output:
+        - Table of countries with largest (end - start) coverage increase
+    """
+
+    # --- read filters ---
+    antigen_name = get_first(form_data, "antigen")     # e.g. "DTP-containing vaccine, 3rd dose"
+    start_year   = get_first(form_data, "start_year", int)
+    end_year     = get_first(form_data, "end_year", int)
+    top_n        = get_first(form_data, "top_n", int)
+
+    # defaults (so the page shows something on first load)
+    if top_n is None:      top_n = 10
+
+    # dropdown sources
+    antigen_opts = exec_query("SELECT name, name FROM Antigen ORDER BY name;")  # value=label=name
+    year_vals    = [y[0] for y in exec_query("SELECT DISTINCT year FROM Vaccination ORDER BY year;")]
+    year_opts    = [(y, y) for y in year_vals]
+
+    # If no years chosen yet, pick a sensible default range
+    if start_year is None and year_vals:
+        start_year = year_vals[0]
+    if end_year is None and year_vals:
+        end_year = year_vals[-1]
+
+    rows = []
+    warning = None
+
+    # Only run when we have both years and a valid order (start <= end)
+    if start_year is not None and end_year is not None and start_year <= end_year:
+        # Build query: join same country+antigen across the two chosen years, compute end−start
+        sql = f"""
+            SELECT
+                C.name AS country,
+                A.name AS antigen,
+                ROUND(
+                    (CAST(NULLIF(TRIM(CAST(V2.coverage AS TEXT)), '') AS REAL)
+                   -CAST(NULLIF(TRIM(CAST(V1.coverage AS TEXT)), '') AS REAL)
+                    ), 2
+                ) AS rate_increase,
+                V1.year AS start_year,
+                V2.year AS end_year
+            FROM Vaccination V1
+            JOIN Vaccination V2
+              ON V1.country = V2.country
+             AND V1.antigen = V2.antigen
+            JOIN Country  C ON C.CountryID  = V1.country
+            JOIN Antigen  A ON A.AntigenID  = V1.antigen
+            WHERE V1.year = ?
+              AND V2.year = ?
+              AND {COVER_REAL.replace("coverage", "V1.coverage")} IS NOT NULL
+              AND {COVER_REAL.replace("coverage", "V2.coverage")} IS NOT NULL
+        """
+        params = [start_year, end_year]
+
+        # Optional antigen filter by name (matches Antigen.name)
+        if antigen_name:
+            sql += " AND A.name = ?"
+            params.append(antigen_name.strip())
+
+        sql += """
+            ORDER BY rate_increase DESC
+            LIMIT ?
+        """
+        params.append(top_n if isinstance(top_n, int) and top_n > 0 else 10)
+
+        rows = exec_query(sql, tuple(params))
+    else:
+        warning = "Please choose a valid start and end year (start ≤ end)."
+
+    # ------------------------- HTML -------------------------
+    page_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Level 3A — Improvement Analysis</title>
+  <style>
+    body {{
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      margin: 0;
+      background: linear-gradient(135deg, #cffafe 0%, #ecfeff 100%);
+      color: #0e7490;
+      min-height: 100vh;
+    }}
+    header {{
+      text-align: center;
+      padding: 40px 20px 20px;
+      background: linear-gradient(90deg, #06b6d4, #0891b2);
+      color: white;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    }}
+    header h1 {{ margin: 0; font-size: 2rem; letter-spacing: .5px; }}
+
+    .filters {{
+      display: flex; gap: 12px; align-items: end; flex-wrap: wrap; justify-content: center;
+      background: #e0f2fe; padding: 16px; border-radius: 12px; margin: 20px auto; width: fit-content;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+    }}
+    .filters label {{ display: grid; gap: 4px; font-size: .95rem; color: #075985; }}
+    select, input[type="number"], button {{
+      padding: 8px 12px; border: 1px solid #7dd3fc; border-radius: 8px; background: white; color: #075985;
+    }}
+    input[type="number"] {{ width: 90px; }}
+    button {{ background: #06b6d4; color: white; cursor: pointer; border: none; }}
+    button:hover {{ background: #0ea5e9; }}
+    a {{ text-decoration: none; color: #0ea5e9; font-weight: 500; }}
+    a:hover {{ text-decoration: underline; }}
+
+    .warn {{
+      max-width: 900px; margin: 0 auto; color: #b45309; background: #fffbeb; border: 1px solid #fcd34d;
+      padding: 10px 14px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }}
+
+    table {{
+      border-collapse: collapse; width: 90%; margin: 20px auto; background: white;
+      border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+    }}
+    th, td {{ border: 1px solid #e5e7eb; padding: 10px 14px; text-align: left; }}
+    th {{ background: #bae6fd; color: #075985; }}
+    tr:nth-child(even) {{ background: #f9fafb; }}
+
+    .footer {{ text-align: center; margin: 30px 0; }}
+    .footer a {{
+      background: #bae6fd; color: #075985; padding: 8px 14px; border-radius: 8px; transition: .2s; margin: 0 5px;
+    }}
+    .footer a:hover {{ background: #06b6d4; color: white; }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📈 Level 3A — Biggest Improvements in Vaccination Coverage</h1>
+  </header>
+
+  <form action="/page3" method="GET" class="filters">
+    <label>Antigen
+      <select name="antigen">
+        <option value="">All antigens</option>
+        {options_html(antigen_opts, antigen_name)}
+      </select>
+    </label>
+
+    <label>Start year
+      <select name="start_year">
+        {options_html(year_opts, start_year)}
+      </select>
+    </label>
+
+    <label>End year
+      <select name="end_year">
+        {options_html(year_opts, end_year)}
+      </select>
+    </label>
+
+    <label>Top N
+      <input type="number" name="top_n" min="1" max="100" value="{top_n or 10}">
+    </label>
+
+    <button type="submit">Apply</button>
+    <a href="/page3">Reset</a>
+  </form>
+
+  {"<div class='warn'>"+warning+"</div>" if warning else ""}
+
+  <table>
+    <thead>
+      <tr>
+        <th>Country</th>
+        <th>Antigen</th>
+        <th>Increase (end − start)</th>
+        <th>Start Year</th>
+        <th>End Year</th>
+      </tr>
+    </thead>
+    <tbody>
+      { ( "".join( td_row(r) for r in rows ) ) or "<tr><td colspan='5'>No data</td></tr>" }
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <a href="/">← Back to Level 1A</a>
+    <a href="/page2">← Back to Level 2A</a>
+  </div>
+</body>
+</html>"""
     return page_html
