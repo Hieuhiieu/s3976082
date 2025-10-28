@@ -1,19 +1,18 @@
 # student_a_level_1.py
 import os
-import pyhtml  # dùng hàm pyhtml.get_results_from_query(DB_PATH, sql)
+import pyhtml 
 
-# --- Xác định đường dẫn database ---
+# --- Absolute path to the database ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "database", "immunisation.db")
 
-# --- Hàm định dạng số ---
 def fmt_int(x):
     try:
         return f"{int(x):,}"
     except Exception:
         return str(x)
 
-# --- Hàm chính tạo HTML ---
+# --- HTML ---
 def get_page_html(form_data):
     """
     Level 1A — Overview:
@@ -23,19 +22,19 @@ def get_page_html(form_data):
       - Disease list
     """
 
-    # --- Truy vấn SQL ---
+    # --- SQL Querries ---
     q_years   = "SELECT MIN(YearID), MAX(YearID) FROM YearDate;"
     q_doses   = "SELECT COALESCE(SUM(doses),0) FROM Vaccination;"
     q_cases   = "SELECT COALESCE(SUM(cases),0) FROM InfectionData;"
     q_disease = "SELECT description FROM Infection_Type ORDER BY description;"
 
-    # --- Lấy dữ liệu từ DB ---
+    # --- Extract info from DB ---
     minY, maxY   = pyhtml.get_results_from_query(DB_PATH, q_years)[0]
     total_doses  = pyhtml.get_results_from_query(DB_PATH, q_doses)[0][0]
     total_cases  = pyhtml.get_results_from_query(DB_PATH, q_cases)[0][0]
     diseases     = [row[0] for row in pyhtml.get_results_from_query(DB_PATH, q_disease)]
 
-    # --- HTML với tone xanh lá bắt mắt hơn ---
+    # --- HTML ---
     page_html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
