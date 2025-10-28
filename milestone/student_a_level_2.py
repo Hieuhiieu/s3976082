@@ -3,7 +3,7 @@ import os
 import sqlite3
 import pyhtml
 
-# --- Absolute path tới database (không phụ thuộc thư mục chạy lệnh) ---
+# --- Absolute path tới database ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "database", "immunisation.db")
 
@@ -106,20 +106,117 @@ def get_page_html(form_data):
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Level 2A — Vaccination</title>
+  <title>Level 2A — Vaccination Rates</title>
   <style>
-    body {{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 24px; }}
-    .filters {{ display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 10px 0 16px; }}
-    select, button {{ padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 8px; }}
-    table {{ border-collapse: collapse; width: 100%; margin-top: 8px; }}
-    th, td {{ border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; }}
-    th {{ background: #f7f7f7; }}
-    h1 {{ margin: 0 0 12px; }}
-    a {{ text-decoration: none; color: #2563eb; }}
+    body {{
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      margin: 0;
+      background: linear-gradient(135deg, #bbf7d0 0%, #f0fdf4 100%);
+      color: #064e3b;
+      min-height: 100vh;
+    }}
+
+    header {{
+      text-align: center;
+      padding: 40px 20px 20px;
+      background: linear-gradient(90deg, #22c55e, #16a34a);
+      color: white;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    }}
+    header h1 {{
+      margin: 0;
+      font-size: 2rem;
+      letter-spacing: 0.5px;
+    }}
+
+    .filters {{
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+      background: #dcfce7;
+      padding: 16px;
+      border-radius: 12px;
+      margin: 20px auto;
+      width: fit-content;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+    }}
+    select, button {{
+      padding: 8px 12px;
+      border: 1px solid #86efac;
+      border-radius: 8px;
+      background: white;
+      color: #065f46;
+    }}
+    button {{
+      background: #22c55e;
+      color: white;
+      cursor: pointer;
+      border: none;
+    }}
+    button:hover {{
+      background: #15803d;
+    }}
+    a {{
+      text-decoration: none;
+      color: #15803d;
+      font-weight: 500;
+    }}
+    a:hover {{
+      text-decoration: underline;
+    }}
+
+    table {{
+      border-collapse: collapse;
+      width: 90%;
+      margin: 20px auto;
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+    }}
+    th, td {{
+      border: 1px solid #e5e7eb;
+      padding: 10px 14px;
+      text-align: left;
+    }}
+    th {{
+      background: #bbf7d0;
+      color: #064e3b;
+    }}
+    tr:nth-child(even) {{
+      background: #f9fafb;
+    }}
+
+    h3 {{
+      text-align: center;
+      color: #166534;
+      margin-top: 30px;
+    }}
+
+    .footer {{
+      text-align: center;
+      margin: 30px 0;
+    }}
+    .footer a {{
+      background: #bbf7d0;
+      color: #065f46;
+      padding: 8px 14px;
+      border-radius: 8px;
+      transition: 0.2s;
+      margin: 0 5px;
+    }}
+    .footer a:hover {{
+      background: #22c55e;
+      color: white;
+    }}
   </style>
 </head>
 <body>
-  <h1>Vaccination rates by country & region</h1>
+  <header>
+    <h1>💉 Vaccination Coverage by Country & Region</h1>
+  </header>
 
   <form action="/page2" method="GET" class="filters">
     <label>Antigen
@@ -136,7 +233,7 @@ def get_page_html(form_data):
       </select>
     </label>
 
-    <label>Region (optional)
+    <label>Region
       <select name="region">
         <option value="">All regions</option>
         {options_html(region_opts, region)}
@@ -144,29 +241,33 @@ def get_page_html(form_data):
     </label>
 
     <button type="submit">Apply</button>
-    <span style="margin-left:8px"><a href="/page2">Reset</a></span>
-    <span style="margin-left:16px"><a href="/">← Back to Level 1A</a></span>
+    <a href="/page2">Reset</a>
   </form>
 
-  <h3>Countries met ≥90% target</h3>
+  <h3>🌍 Countries Meeting ≥90% Vaccination Target</h3>
   <table>
     <thead>
-      <tr><th>Antigen</th><th>Year</th><th>Country</th><th>Region</th><th>% of target</th></tr>
+      <tr><th>Antigen</th><th>Year</th><th>Country</th><th>Region</th><th>% of Target</th></tr>
     </thead>
     <tbody>
       { ( "".join( td_row(r) for r in rows1 ) ) or "<tr><td colspan='5'>No data</td></tr>" }
     </tbody>
   </table>
 
-  <h3>Per-region count meeting ≥90%</h3>
+  <h3>🗺️ Regional Counts Meeting ≥90%</h3>
   <table>
     <thead>
-      <tr><th>Antigen</th><th>Year</th><th>Region</th><th>Countries met 90%</th></tr>
+      <tr><th>Antigen</th><th>Year</th><th>Region</th><th>Countries ≥90%</th></tr>
     </thead>
     <tbody>
       { ( "".join( td_row(r) for r in rows2 ) ) or "<tr><td colspan='4'>No data</td></tr>" }
     </tbody>
   </table>
+
+  <div class="footer">
+    <a href="/">← Back to Level 1A</a>
+    <a href="/page3">→ Go to Level 3A</a>
+  </div>
 </body>
 </html>"""
     return page_html
