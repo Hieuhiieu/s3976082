@@ -2,7 +2,6 @@
 import os
 import pyhtml 
 
-# --- Absolute path to the database ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "database", "immunisation.db")
 
@@ -12,69 +11,73 @@ def fmt_int(x):
     except Exception:
         return str(x)
 
-# --- HTML ---
 def get_page_html(form_data):
-    """
-    Level 1A — Overview:
-      - Timeframe (min/max YearID)
-      - Total vaccine doses
-      - Total infection cases
-      - Disease list
-    """
 
-    # --- SQL Querries ---
     q_years   = "SELECT MIN(YearID), MAX(YearID) FROM YearDate;"
     q_doses   = "SELECT COALESCE(SUM(doses),0) FROM Vaccination;"
     q_cases   = "SELECT COALESCE(SUM(cases),0) FROM InfectionData;"
     q_disease = "SELECT description FROM Infection_Type ORDER BY description;"
 
-    # --- Extract info from DB ---
     minY, maxY   = pyhtml.get_results_from_query(DB_PATH, q_years)[0]
     total_doses  = pyhtml.get_results_from_query(DB_PATH, q_doses)[0][0]
     total_cases  = pyhtml.get_results_from_query(DB_PATH, q_cases)[0][0]
     diseases     = [row[0] for row in pyhtml.get_results_from_query(DB_PATH, q_disease)]
 
-    # --- HTML ---
     page_html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Level 1A — Overview</title>
+  <title>Overview</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <style>
+    :root {{
+      --green-1:#22c55e; --green-2:#16a34a; --ink:#064e3b;
+      --bg1:#bbf7d0; --bg2:#f0fdf4;
+    }}
     body {{
       font-family: "Segoe UI", Roboto, Arial, sans-serif;
       margin: 0;
-      padding: 0;
-      background: linear-gradient(135deg, #bbf7d0 0%, #f0fdf4 100%);
-      color: #064e3b;
+      background: linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 100%);
+      color: var(--ink);
       min-height: 100vh;
     }}
 
     header {{
-      text-align: center;
-      padding: 40px 20px 20px;
-      background: linear-gradient(90deg, #22c55e, #16a34a);
+      background: linear-gradient(90deg, var(--green-1), var(--green-2));
       color: white;
       box-shadow: 0 2px 10px rgba(0,0,0,0.15);
     }}
-    header h1 {{
-      margin: 0;
-      font-size: 2rem;
-      letter-spacing: 0.5px;
+    .wrap {{ max-width: 1100px; margin: 0 auto; padding: 0 20px; }}
+    .topbar {{
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 0 10px;
     }}
-    header small {{
-      display: block;
-      margin-top: 6px;
-      color: #dcfce7;
+    .brand {{ font-size: 1.35rem; font-weight: 600; }}
+    nav a {{
+      color: #e6f9ec; text-decoration: none; margin-left: 14px;
+      padding: 8px 12px; border-radius: 8px; transition:.2s;
+    }}
+    nav a:hover {{ background: rgba(255,255,255,.20); }}
+
+    .hero {{ padding: 5px 0 22px; }}
+    .hero h1 {{ margin: 6px 0 10px; font-size: 2rem; }}
+    .summary {{
+      margin-top: 10px;
+      background: rgba(255,255,255,.20);
+      border: 1px solid rgba(255,255,255,.30);
+      padding: 14px;
+      border-radius: 12px;
+      line-height: 1.45;
+      font-size: 0.97rem;
     }}
 
-    .grid {{
-      display: grid;
-      gap: 20px;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      margin: 30px auto;
-      max-width: 1000px;
-      padding: 0 20px;
+    .grid-3 {{
+      display: grid; gap: 20px;
+      grid-template-columns: repeat(3, 1fr);
+      margin-top: 26px;
+    }}
+    @media (max-width: 900px) {{
+      .grid-3 {{ grid-template-columns: 1fr; }}
     }}
 
     .card {{
@@ -82,78 +85,52 @@ def get_page_html(form_data):
       border-radius: 14px;
       padding: 20px;
       box-shadow: 0 4px 10px rgba(0,0,0,0.08);
-      border-top: 5px solid #22c55e;
-      transition: all 0.25s ease;
+      border-top: 5px solid var(--green-1);
       text-align: center;
+      transition: .25s;
     }}
     .card:hover {{
-      transform: translateY(-6px);
-      box-shadow: 0 8px 18px rgba(0,0,0,0.12);
+      transform: translateY(-5px);
+      box-shadow: 0 8px 18px rgba(0,0,0,0.14);
     }}
-    .card b {{
-      display: block;
-      color: #166534;
-      font-size: 1.1rem;
-      margin-bottom: 6px;
-    }}
-    .card span.value {{
-      font-size: 1.3rem;
-      font-weight: 600;
-      color: #065f46;
-    }}
+    .card b {{ display:block; color:#166534; margin-bottom:6px; }}
+    .card .value {{ font-size:1.35rem; font-weight:700; color:#065f46; }}
 
-    .tags {{
-      margin-top: 6px;
-    }}
     .tags span {{
-      display: inline-block;
-      background: #dcfce7;
-      border: 1px solid #86efac;
-      color: #065f46;
-      padding: 5px 10px;
-      border-radius: 999px;
-      margin: 3px 4px;
-      font-size: 0.9em;
-      transition: 0.2s;
+      display:inline-block; padding:6px 12px;
+      background:#dcfce7; border:1px solid #86efac;
+      border-radius:999px; margin:4px 6px 0 0;
+      font-size:.95rem; color:#065f46;
+      transition:.2s;
     }}
-    .tags span:hover {{
-      background: #86efac;
-      color: white;
-    }}
-
-    .footer {{
-      text-align: center;
-      margin: 30px 0;
-      color: #166534;
-      font-weight: 500;
-      display: flex;
-      justify-content: center;
-      gap: 16px;
-    }}
-    .footer a {{
-      color: #15803d;
-      text-decoration: none;
-      background: #bbf7d0;
-      padding: 10px 18px;
-      border-radius: 8px;
-      transition: 0.2s;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-    }}
-    .footer a:hover {{
-      background: #22c55e;
-      color: white;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 10px rgba(0,0,0,0.12);
-    }}
+    .tags span:hover {{ background:#22c55e; color:white; }}
   </style>
 </head>
 <body>
-  <header>
-    <h1>🌿 Investigating Preventable Infectious Diseases</h1>
-    <small>Live data from <code>immunisation.db</code></small>
-  </header>
+<header>
+  <div class="wrap topbar">
+    <h2 class="brand">🌿 Immunisation Insights</h2>
+    <nav>
+      <a href="/">Overview</a>
+      <a href="/page2">Coverage</a>
+      <a href="/page3">Improvements</a>
+    </nav>
+  </div>
+  <div class="wrap hero">
+    <h1>Investigating Preventable Infectious Diseases</h1>
+    <div class="summary">
+      This interactive dashboard provides a clear and trustworthy overview of global immunisation data.
+      It allows users to explore how vaccination efforts have changed over time, uncover trends in
+      infection rates, and analyse coverage differences between diseases. From a high-level summary to 
+      deeper analytical views, this system is designed to support public health decision-making, 
+      research, and education. Use the menu above to move between overview statistics, comparative analysis 
+      and improvement tracking across multiple countries and antigens.
+    </div>
+  </div>
+</header>
 
-  <div class="grid">
+<main class="wrap">
+  <section class="grid-3">
     <div class="card">
       <b>📅 Timeframe</b>
       <span class="value">{minY} – {maxY}</span>
@@ -166,19 +143,18 @@ def get_page_html(form_data):
       <b>🦠 Total infection cases</b>
       <span class="value">{fmt_int(total_cases)}</span>
     </div>
-    <div class="card">
+  </section>
+
+  <section style="margin-top:24px;">
+    <div class="card" style="text-align:left">
       <b>🩺 Diseases</b>
       <div class="tags">
         {''.join(f'<span>{d}</span>' for d in diseases)}
       </div>
     </div>
-  </div>
-
-  <div class="footer">
-    <a href="/page2">→ Go to Level 2A</a>
-    <a href="/page3">→ Go to Level 3A</a>
-  </div>
+  </section>
+</main>
 </body>
 </html>"""
+
     return page_html
-    
