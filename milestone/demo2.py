@@ -18,7 +18,7 @@ pyhtml.MyRequestHandler.pages["/"] = student_a_level_1
 pyhtml.MyRequestHandler.pages["/page2"] = student_a_level_2
 pyhtml.MyRequestHandler.pages["/page3"] = student_a_level_3
 
-# ✅ Enable query parameter parsing so form_data keeps Antigen / Year / Region values
+# Enable query parameter parsing so form_data keeps Antigen / Year / Region values
 pyhtml.enable_query_parsing = True
 
 # Host the site
