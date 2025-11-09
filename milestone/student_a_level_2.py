@@ -1,7 +1,7 @@
 # student_a_level_2.py
 import os
 import sqlite3
-import pyhtml  # (không bắt buộc dùng, nhưng giữ để đồng bộ với project)
+import pyhtml  
 
 # ---------- DB path ----------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -38,7 +38,6 @@ def options_html(options, selected_val):
 def td_row(cells):
     return "<tr>" + "".join(f"<td>{'' if c is None else c}</td>" for c in cells) + "</tr>"
 
-# cast coverage -> REAL; bỏ rỗng
 PCT_EXPR = "CAST(NULLIF(TRIM(CAST(V.coverage AS TEXT)), '') AS REAL)"
 
 # ---------- main ----------
@@ -108,7 +107,7 @@ def get_page_html(form_data):
     """
     rows2 = exec_query(sql2, tuple(p2))
 
-    # -------- HTML (đồng bộ style với Level 3)
+    # -------- HTML 
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
