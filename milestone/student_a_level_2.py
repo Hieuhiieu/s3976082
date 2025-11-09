@@ -1,15 +1,14 @@
 # student_a_level_2.py
 import os
 import sqlite3
-import pyhtml
+import pyhtml  # (không bắt buộc dùng, nhưng giữ để đồng bộ với project)
 
-# ---------- DB path (stable regardless of where the server is started) ----------
+# ---------- DB path ----------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "database", "immunisation.db")
 
 # ---------- helpers ----------
 def exec_query(sql: str, params=()):
-    """Run a SELECT with placeholders and return list of tuples."""
     con = sqlite3.connect(DB_PATH)
     cur = con.cursor()
     cur.execute(sql, params)
@@ -18,10 +17,7 @@ def exec_query(sql: str, params=()):
     return rows
 
 def get_first(form_data, key):
-    """
-    Return the first value for a query param (or None).
-    Works for {'k': ['v']} and {'k': 'v'}. Empty string -> None.
-    """
+    """Lấy giá trị đầu tiên từ query params; '' -> None. Hỗ trợ {'k':['v']} hoặc {'k':'v'}."""
     v = form_data.get(key)
     if isinstance(v, list):
         v = v[0] if v else None
@@ -30,10 +26,7 @@ def get_first(form_data, key):
     return str(v)
 
 def options_html(options, selected_val):
-    """
-    Build <option> tags. options: [(value,label), ...]
-    Keeps selection even if types differ by normalizing to strings.
-    """
+    """Render <option> từ [(value,label),...] và giữ selection an toàn kiểu chuỗi."""
     sel = "" if selected_val is None else str(selected_val).strip()
     out = []
     for val, label in options:
@@ -45,27 +38,27 @@ def options_html(options, selected_val):
 def td_row(cells):
     return "<tr>" + "".join(f"<td>{'' if c is None else c}</td>" for c in cells) + "</tr>"
 
-# Coerce V.coverage to REAL, ignoring blanks
+# cast coverage -> REAL; bỏ rỗng
 PCT_EXPR = "CAST(NULLIF(TRIM(CAST(V.coverage AS TEXT)), '') AS REAL)"
 
 # ---------- main ----------
 def get_page_html(form_data):
     """
-    Level 2A:
-      - Filters: antigen (name), year, region (name, optional)
-      - Table 1: Countries meeting ≥90% target
-      - Table 2: Per-region count meeting ≥90%
+    Coverage page (Level 2):
+      - Filters: antigen (tên), year (năm), region (tên vùng)
+      - Bảng 1: các quốc gia đạt ≥90%
+      - Bảng 2: số quốc gia đạt ≥90% theo vùng
     """
-    antigen = get_first(form_data, "antigen")   # antigen name, e.g., "Measles-containing vaccine, 1st dose"
-    year    = get_first(form_data, "year")      # e.g., "2004"
-    region  = get_first(form_data, "region")    # region name, e.g., "South Asia"
+    antigen = get_first(form_data, "antigen")
+    year    = get_first(form_data, "year")
+    region  = get_first(form_data, "region")
 
-    # Dropdowns use readable VALUES (names), so filters are simple strings later
+    # dropdown sources
     antigen_opts = exec_query("SELECT name, name FROM Antigen ORDER BY name;")
     year_opts    = [(y[0], y[0]) for y in exec_query("SELECT DISTINCT year FROM Vaccination ORDER BY year;")]
     region_opts  = exec_query("SELECT region, region FROM Region ORDER BY region;")
 
-    # ---------- Table 1: Countries meeting ≥90% ----------
+    # -------- Table 1: countries ≥90%
     sql1 = f"""
       SELECT
         A.name AS antigen,
@@ -81,19 +74,15 @@ def get_page_html(form_data):
     """
     p1 = []
     if antigen:
-        sql1 += " AND A.name = ?"
-        p1.append(antigen.strip())
+        sql1 += " AND A.name = ?"; p1.append(antigen.strip())
     if year:
-        sql1 += " AND V.year = ?"
-        p1.append(year.strip())
+        sql1 += " AND V.year = ?"; p1.append(year.strip())
     if region:
-        sql1 += " AND R.region = ?"
-        p1.append(region.strip())
-    # ORDER BY dùng alias nên không cần f-string thêm PCT_EXPR ở đây
+        sql1 += " AND R.region = ?"; p1.append(region.strip())
     sql1 += " ORDER BY percentage_of_target DESC, country;"
     rows1 = exec_query(sql1, tuple(p1))
 
-    # ---------- Table 2: Per-region counts meeting ≥90% ----------
+    # -------- Table 2: per-region count ≥90%
     sql2 = f"""
       SELECT
         A.name   AS antigen,
@@ -108,21 +97,18 @@ def get_page_html(form_data):
     """
     p2 = []
     if antigen:
-        sql2 += " AND A.name = ?"
-        p2.append(antigen.strip())
+        sql2 += " AND A.name = ?"; p2.append(antigen.strip())
     if year:
-        sql2 += " AND V.year = ?"
-        p2.append(year.strip())
+        sql2 += " AND V.year = ?"; p2.append(year.strip())
     if region:
-        sql2 += " AND R.region = ?"
-        p2.append(region.strip())
+        sql2 += " AND R.region = ?"; p2.append(region.strip())
     sql2 += """
       GROUP BY A.name, V.year, R.region
       ORDER BY countries_met_90 DESC, R.region;
     """
     rows2 = exec_query(sql2, tuple(p2))
 
-    # ---------- HTML ----------
+    # -------- HTML (đồng bộ style với Level 3)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -131,64 +117,67 @@ def get_page_html(form_data):
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <style>
     :root {{
-      --green-1:#22c55e; --green-2:#16a34a; --ink:#064e3b;
+      --g1:#22c55e; --g2:#16a34a; --ink:#064e3b;
       --bg1:#bbf7d0; --bg2:#f0fdf4;
+      --btn:#22c55e; --btnH:#15803d; --ghostB:#bbf7d0; --ghostT:#065f46;
     }}
+    * {{ box-sizing:border-box; }}
     body {{
-      font-family: "Segoe UI", Roboto, Arial, sans-serif;
-      margin: 0;
-      background: linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 100%);
-      color: var(--ink);
-      min-height: 100vh;
+      font-family:"Segoe UI", Roboto, Arial, sans-serif;
+      margin:0;
+      background:linear-gradient(135deg, var(--bg1), var(--bg2));
+      color:var(--ink);
+      min-height:100vh;
     }}
 
     /* NAVBAR */
     header {{
-      background: linear-gradient(90deg, var(--green-1), var(--green-2));
-      color: white;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+      background:linear-gradient(90deg, var(--g1), var(--g2));
+      color:#fff;
+      box-shadow:0 2px 10px rgba(0,0,0,.15);
     }}
-    .wrap {{ max-width: 1100px; margin: 0 auto; padding: 0 20px; }}
-    .topbar {{
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 0 10px;
-    }}
-    .brand {{ margin: 0; font-size: 1.3rem; font-weight: 600; letter-spacing: .3px; }}
+    .wrap {{ max-width:1100px; margin:0 auto; padding:0 20px; }}
+    .topbar {{ display:flex; align-items:center; justify-content:space-between; padding:14px 0 10px; }}
+    .brand {{ margin:0; font-size:1.3rem; font-weight:600; }}
     nav a {{
-      color: #e7f8ee; text-decoration: none; margin-left: 14px;
-      padding: 8px 12px; border-radius: 10px; transition: .2s;
+      color:#e7f8ee; text-decoration:none; margin-left:14px; padding:8px 12px; border-radius:10px; transition:.2s;
     }}
-    nav a:hover {{ background: rgba(255,255,255,.15); color: #fff; }}
+    nav a:hover {{ background:rgba(255,255,255,.15); color:#fff; }}
+    .hero {{ padding:8px 0 18px; }}
+    .hero h1 {{ margin:6px 0 0; font-size:2.2rem; }}
 
-    .hero {{ padding: 6px 0 18px; }}
-    .hero h1 {{ margin: 8px 0 6px; font-size: 2rem; letter-spacing: .4px; }}
-
-    /* FILTERS & TABLES */
+    /* FILTER BAR (match Level 3) */
     .filters {{
-      display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center;
-      background: #dcfce7; padding: 16px; border-radius: 12px; margin: 20px auto; width: fit-content;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+      display:flex; gap:12px; align-items:end; flex-wrap:wrap; justify-content:center;
+      background:#dcfce7; padding:14px 16px; border-radius:12px;
+      margin:18px auto 10px; width:fit-content;
+      box-shadow:0 3px 8px rgba(0,0,0,.08);
     }}
-    select, button {{
-      padding: 8px 12px; border: 1px solid #86efac; border-radius: 8px; background: white; color: #065f46;
+    .filters label {{ display:grid; gap:4px; font-size:.95rem; color:#065f46; }}
+    select {{
+      padding:8px 12px; border:1px solid #86efac; border-radius:8px; background:#fff; color:#065f46;
+      min-width:220px; height:36px;
     }}
-    button {{ background: #22c55e; color: white; cursor: pointer; border: none; }}
-    button:hover {{ background: #15803d; }}
 
+    .btn {{ border:none; border-radius:10px; padding:8px 14px; cursor:pointer; font-weight:600; }}
+    .btn--primary {{ background:var(--btn); color:#fff; }}
+    .btn--primary:hover {{ background:var(--btnH); }}
+    .btn--ghost {{ background:var(--ghostB); color:var(--ghostT); text-decoration:none; display:inline-flex; align-items:center; height:36px; }}
+    .btn--ghost:hover {{ filter:brightness(.95); }}
+
+    /* TABLES */
     table {{
-      border-collapse: collapse; width: 90%; margin: 20px auto; background: white;
-      border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+      border-collapse:collapse; width:95%; margin:20px auto; background:#fff;
+      border-radius:12px; overflow:hidden; box-shadow:0 4px 10px rgba(0,0,0,.08);
     }}
-    th, td {{ border: 1px solid #e5e7eb; padding: 10px 14px; text-align: left; }}
-    th {{ background: #bbf7d0; color: #064e3b; }}
-    tr:nth-child(even) {{ background: #f9fafb; }}
+    th, td {{ border:1px solid #e5e7eb; padding:10px 14px; text-align:left; }}
+    th {{ background:#bbf7d0; color:#064e3b; }}
+    tr:nth-child(even) {{ background:#f9fafb; }}
 
-    h3 {{ text-align: center; color: #166534; margin-top: 26px; }}
+    h3 {{ text-align:center; color:#166534; margin-top:26px; }}
   </style>
 </head>
 <body>
-
-  <!-- NAVBAR -->
   <header>
     <div class="wrap topbar">
       <h2 class="brand">🌿 Immunisation Insights</h2>
@@ -204,17 +193,16 @@ def get_page_html(form_data):
   </header>
 
   <div class="wrap">
-
     <form action="/page2" method="GET" class="filters">
       <label>Antigen
         <select name="antigen">
-          <option value="">All</option>
+          <option value="">All antigens</option>
           {options_html(antigen_opts, antigen)}
         </select>
       </label>
       <label>Year
         <select name="year">
-          <option value="">All</option>
+          <option value="">All years</option>
           {options_html(year_opts, year)}
         </select>
       </label>
@@ -224,8 +212,8 @@ def get_page_html(form_data):
           {options_html(region_opts, region)}
         </select>
       </label>
-      <button type="submit">Apply</button>
-      <a href="/page2" style="text-decoration:none;color:#065f46">Reset</a>
+      <button class="btn btn--primary" type="submit">Apply</button>
+      <a class="btn btn--ghost" href="/page2">Reset</a>
     </form>
 
     <h3>🌍 Countries Meeting ≥90% Vaccination Target</h3>
@@ -247,7 +235,6 @@ def get_page_html(form_data):
         {("".join(td_row(r) for r in rows2)) or "<tr><td colspan='4'>No data</td></tr>"}
       </tbody>
     </table>
-
   </div>
 </body>
 </html>
