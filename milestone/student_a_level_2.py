@@ -89,6 +89,7 @@ def get_page_html(form_data):
     if region:
         sql1 += " AND R.region = ?"
         p1.append(region.strip())
+    # ORDER BY dùng alias nên không cần f-string thêm PCT_EXPR ở đây
     sql1 += " ORDER BY percentage_of_target DESC, country;"
     rows1 = exec_query(sql1, tuple(p1))
 
@@ -122,26 +123,47 @@ def get_page_html(form_data):
     rows2 = exec_query(sql2, tuple(p2))
 
     # ---------- HTML ----------
-    page_html = f"""<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Level 2A — Vaccination Rates</title>
+  <title>Coverage</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <style>
+    :root {{
+      --green-1:#22c55e; --green-2:#16a34a; --ink:#064e3b;
+      --bg1:#bbf7d0; --bg2:#f0fdf4;
+    }}
     body {{
       font-family: "Segoe UI", Roboto, Arial, sans-serif;
       margin: 0;
-      background: linear-gradient(135deg, #bbf7d0 0%, #f0fdf4 100%);
-      color: #064e3b;
+      background: linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 100%);
+      color: var(--ink);
       min-height: 100vh;
     }}
+
+    /* NAVBAR */
     header {{
-      text-align: center; padding: 40px 20px 20px;
-      background: linear-gradient(90deg, #22c55e, #16a34a); color: white;
+      background: linear-gradient(90deg, var(--green-1), var(--green-2));
+      color: white;
       box-shadow: 0 2px 10px rgba(0,0,0,0.15);
     }}
-    header h1 {{ margin: 0; font-size: 2rem; letter-spacing: .5px; }}
+    .wrap {{ max-width: 1100px; margin: 0 auto; padding: 0 20px; }}
+    .topbar {{
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 0 10px;
+    }}
+    .brand {{ margin: 0; font-size: 1.3rem; font-weight: 600; letter-spacing: .3px; }}
+    nav a {{
+      color: #e7f8ee; text-decoration: none; margin-left: 14px;
+      padding: 8px 12px; border-radius: 10px; transition: .2s;
+    }}
+    nav a:hover {{ background: rgba(255,255,255,.15); color: #fff; }}
 
+    .hero {{ padding: 6px 0 18px; }}
+    .hero h1 {{ margin: 8px 0 6px; font-size: 2rem; letter-spacing: .4px; }}
+
+    /* FILTERS & TABLES */
     .filters {{
       display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center;
       background: #dcfce7; padding: 16px; border-radius: 12px; margin: 20px auto; width: fit-content;
@@ -161,66 +183,72 @@ def get_page_html(form_data):
     th {{ background: #bbf7d0; color: #064e3b; }}
     tr:nth-child(even) {{ background: #f9fafb; }}
 
-    h3 {{ text-align: center; color: #166534; margin-top: 30px; }}
-
-    .footer {{ text-align: center; margin: 30px 0; }}
-    .footer a {{
-      background: #bbf7d0; color: #065f46; padding: 8px 14px; border-radius: 8px; transition: .2s; margin: 0 5px;
-      text-decoration: none;
-    }}
-    .footer a:hover {{ background: #22c55e; color: white; }}
+    h3 {{ text-align: center; color: #166534; margin-top: 26px; }}
   </style>
 </head>
 <body>
-  <header><h1>💉 Vaccination Coverage by Country & Region</h1></header>
 
-  <form action="/page2" method="GET" class="filters">
-    <label>Antigen
-      <select name="antigen">
-        <option value="">All</option>
-        {options_html(antigen_opts, antigen)}
-      </select>
-    </label>
-    <label>Year
-      <select name="year">
-        <option value="">All</option>
-        {options_html(year_opts, year)}
-      </select>
-    </label>
-    <label>Region
-      <select name="region">
-        <option value="">All regions</option>
-        {options_html(region_opts, region)}
-      </select>
-    </label>
-    <button type="submit">Apply</button>
-    <a href="/page2">Reset</a>
-  </form>
+  <!-- NAVBAR -->
+  <header>
+    <div class="wrap topbar">
+      <h2 class="brand">🌿 Immunisation Insights</h2>
+      <nav>
+        <a href="/">Overview</a>
+        <a href="/page2">Coverage</a>
+        <a href="/page3">Improvements</a>
+      </nav>
+    </div>
+    <div class="wrap hero">
+      <h1>Vaccination Coverage by Country & Region</h1>
+    </div>
+  </header>
 
-  <h3>🌍 Countries Meeting ≥90% Vaccination Target</h3>
-  <table>
-    <thead>
-      <tr><th>Antigen</th><th>Year</th><th>Country</th><th>Region</th><th>% of Target</th></tr>
-    </thead>
-    <tbody>
-      { ( "".join( td_row(r) for r in rows1 ) ) or "<tr><td colspan='5'>No data</td></tr>" }
-    </tbody>
-  </table>
+  <div class="wrap">
 
-  <h3>🗺️ Regional Counts Meeting ≥90%</h3>
-  <table>
-    <thead>
-      <tr><th>Antigen</th><th>Year</th><th>Region</th><th>Countries ≥90%</th></tr>
-    </thead>
-    <tbody>
-      { ( "".join( td_row(r) for r in rows2 ) ) or "<tr><td colspan='4'>No data</td></tr>" }
-    </tbody>
-  </table>
+    <form action="/page2" method="GET" class="filters">
+      <label>Antigen
+        <select name="antigen">
+          <option value="">All</option>
+          {options_html(antigen_opts, antigen)}
+        </select>
+      </label>
+      <label>Year
+        <select name="year">
+          <option value="">All</option>
+          {options_html(year_opts, year)}
+        </select>
+      </label>
+      <label>Region
+        <select name="region">
+          <option value="">All regions</option>
+          {options_html(region_opts, region)}
+        </select>
+      </label>
+      <button type="submit">Apply</button>
+      <a href="/page2" style="text-decoration:none;color:#065f46">Reset</a>
+    </form>
 
-  <div class="footer">
-    <a href="/">← Back to Level 1A</a>
-    <a href="/page3">→ Go to Level 3A</a>
+    <h3>🌍 Countries Meeting ≥90% Vaccination Target</h3>
+    <table>
+      <thead>
+        <tr><th>Antigen</th><th>Year</th><th>Country</th><th>Region</th><th>% of Target</th></tr>
+      </thead>
+      <tbody>
+        {("".join(td_row(r) for r in rows1)) or "<tr><td colspan='5'>No data</td></tr>"}
+      </tbody>
+    </table>
+
+    <h3>🗺 Regional Counts Meeting ≥90%</h3>
+    <table>
+      <thead>
+        <tr><th>Antigen</th><th>Year</th><th>Region</th><th>Countries ≥90%</th></tr>
+      </thead>
+      <tbody>
+        {("".join(td_row(r) for r in rows2)) or "<tr><td colspan='4'>No data</td></tr>"}
+      </tbody>
+    </table>
+
   </div>
 </body>
-</html>"""
-    return page_html
+</html>
+"""
